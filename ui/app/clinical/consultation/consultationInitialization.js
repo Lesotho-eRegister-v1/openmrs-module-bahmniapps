@@ -68,7 +68,9 @@ angular.module('bahmni.clinical').factory('consultationInitialization',
                         return obs.concept && obs.concept.name === Bahmni.Common.Constants.vitalsConceptName;
                     });
 
-                    // If vitals already exist in current encounter, don't fetch from previous encounters
+                    // Don't fetch vitals if:
+                    // 1. Vitals already exist in current encounter
+                    // 2. encounterUuid is defined (we're editing an existing consultation, not creating a new one)
                     if (hasExistingVitals || encounterUuid) {
                         return $q.when(consultation);
                     }
@@ -77,10 +79,9 @@ angular.module('bahmni.clinical').factory('consultationInitialization',
                     return observationsService.fetch(patientUuid, [Bahmni.Common.Constants.vitalsConceptName], 'latest', 1, null, null, null, null)
                         .then(function (response) {
                             if (response.data && response.data.length > 0) {
-                                // Merge the latest vitals observations into the consultation
+                                // Add vitals from previous encounter to pre-populate the form
                                 var latestVitals = response.data[0];
                                 if (latestVitals && latestVitals.groupMembers && latestVitals.groupMembers.length > 0) {
-                                    // Only add vitals if they don't already exist
                                     consultation.observations = consultation.observations || [];
                                     consultation.observations.push(latestVitals);
                                 }

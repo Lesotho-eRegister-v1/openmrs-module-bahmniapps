@@ -85,15 +85,16 @@ describe('consultationInitialization', function () {
             consultationInitialization(patientUuid, encounterUuid, programUuid, enrollment, followUpConditionConcept)
                 .then(function (consultation) {
                     // Verify that observationsService.fetch was called to get latest vitals
+                    // Parameters: patientUuid, conceptNames, scope, numberOfVisits, visitUuid, obsIgnoreList, filterObsWithOrders, patientProgramUuid
                     expect(observationsService.fetch).toHaveBeenCalledWith(
                         patientUuid, 
                         ['Vitals'], 
                         'latest', 
                         1, 
-                        null, 
-                        null, 
-                        null, 
-                        null
+                        null,  // visitUuid
+                        null,  // obsIgnoreList
+                        null,  // filterObsWithOrders
+                        null   // patientProgramUuid
                     );
                     
                     // Verify that vitals were added to consultation observations
