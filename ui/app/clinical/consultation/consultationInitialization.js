@@ -1,8 +1,8 @@
 'use strict';
 
 angular.module('bahmni.clinical').factory('consultationInitialization',
-    ['$q', 'diagnosisService', '$rootScope', 'encounterService', 'sessionService', 'configurations', '$bahmniCookieStore', 'retrospectiveEntryService', 'conditionsService',
-        function ($q, diagnosisService, $rootScope, encounterService, sessionService, configurations, $bahmniCookieStore, retrospectiveEntryService, conditionsService) {
+    ['$q', 'diagnosisService', '$rootScope', 'encounterService', 'sessionService', 'configurations', '$bahmniCookieStore', 'retrospectiveEntryService', 'conditionsService', 'observationsService',
+        function ($q, diagnosisService, $rootScope, encounterService, sessionService, configurations, $bahmniCookieStore, retrospectiveEntryService, conditionsService, observationsService) {
             return function (patientUuid, encounterUuid, programUuid, enrollment, followUpConditionConcept) {
                 if (encounterUuid === 'active') {
                     encounterUuid = undefined;
@@ -62,7 +62,41 @@ angular.module('bahmni.clinical').factory('consultationInitialization',
                     return getActiveEncounter();
                 };
 
+                var fetchAndMergeLatestVitals = function (consultation) {
+                    // Only fetch vitals if this is a new consultation (no existing observations for vitals)
+                    var hasExistingVitals = _.some(consultation.observations, function (obs) {
+                        return obs.concept && obs.concept.name === Bahmni.Common.Constants.vitalsConceptName;
+                    });
+
+                    // If vitals already exist in current encounter, don't fetch from previous encounters
+                    if (hasExistingVitals || encounterUuid) {
+                        return $q.when(consultation);
+                    }
+
+                    // Fetch latest vitals from any recent encounter (scope: latest, numberOfVisits: 1)
+                    return observationsService.fetch(patientUuid, [Bahmni.Common.Constants.vitalsConceptName], 'latest', 1, null, null, null, null)
+                        .then(function (response) {
+                            if (response.data && response.data.length > 0) {
+                                // Merge the latest vitals observations into the consultation
+                                var latestVitals = response.data[0];
+                                if (latestVitals && latestVitals.groupMembers && latestVitals.groupMembers.length > 0) {
+                                    // Only add vitals if they don't already exist
+                                    consultation.observations = consultation.observations || [];
+                                    consultation.observations.push(latestVitals);
+                                }
+                            }
+                            return consultation;
+                        })
+                        .catch(function (error) {
+                            // If there's an error fetching vitals, just continue without them
+                            console.error('Error fetching latest vitals:', error);
+                            return consultation;
+                        });
+                };
+
                 return getEncounter().then(function (consultation) {
+                    return fetchAndMergeLatestVitals(consultation);
+                }).then(function (consultation) {
                     return diagnosisService.populateDiagnosisInformation(patientUuid, consultation).then(function (diagnosisConsultation) {
                         diagnosisConsultation.preSaveHandler = new Bahmni.Clinical.Notifier();
                         diagnosisConsultation.postSaveHandler = new Bahmni.Clinical.Notifier();
